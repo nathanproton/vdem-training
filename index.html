@@ -368,6 +368,43 @@
         <h1 class="page-title">Training Event Management</h1>
 
         <div class="card">
+            <div class="card-title" onclick="toggleCollapse('settings')">
+                <span>Settings</span>
+                <span class="collapse-icon" id="settings-icon">+</span>
+            </div>
+            <div class="card-body collapsed" id="settings-body">
+                <div style="background: #e8f4f8; border: 1px solid #b8dce8; padding: 8px; font-size: 12px; margin: 12px;">
+                    <strong>ℹ️ About Draft Submission:</strong><br>
+                    To use "Save Draft to Repository", you need:<br>
+                    • A GitHub Personal Access Token (repo scope)<br>
+                    • The draft submission password<br>
+                    Your token is stored locally in your browser only.
+                </div>
+                
+                <form id="settings-form">
+                    <div class="field">
+                        <label for="github_token">GitHub Token (optional)</label>
+                        <input type="password" id="github_token" name="github_token" class="input" placeholder="ghp_xxxxxxxxxxxx">
+                    </div>
+                    
+                    <div class="field">
+                        <label></label>
+                        <div style="font-size: 11px; color: #666; margin-bottom: 8px;">
+                            <a href="https://github.com/settings/tokens" target="_blank" rel="noopener">Create a token</a> with "public_repo" scope.
+                            Stored in your browser only - never sent to our servers.
+                        </div>
+                    </div>
+                    
+                    <div class="field">
+                        <label></label>
+                        <button type="button" onclick="saveToken()">Save Token</button>
+                        <button type="button" onclick="clearToken()">Clear Token</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
             <div class="card-title" onclick="toggleCollapse('add-form')">
                 <span>Add New Event</span>
                 <span class="collapse-icon" id="add-form-icon">−</span>
@@ -589,6 +626,32 @@
         // Save events to localStorage
         function saveEventsToStorage() {
             localStorage.setItem('vdem_training_events', JSON.stringify(events));
+        }
+
+        // Token management
+        function saveToken() {
+            const token = document.getElementById('github_token').value.trim();
+            if (token) {
+                localStorage.setItem('vdem_github_token', token);
+                alert('Token saved to browser storage.\n\nYou can now use "Save Draft to Repository".');
+            } else {
+                alert('Please enter a GitHub token.');
+            }
+        }
+
+        function clearToken() {
+            if (confirm('Clear saved GitHub token from browser?')) {
+                localStorage.removeItem('vdem_github_token');
+                document.getElementById('github_token').value = '';
+                alert('Token cleared.');
+            }
+        }
+
+        function loadToken() {
+            const token = localStorage.getItem('vdem_github_token');
+            if (token) {
+                document.getElementById('github_token').value = token;
+            }
         }
 
         let events = loadEventsFromStorage();
@@ -866,8 +929,16 @@
                 return;
             }
 
+            // Check if token is configured
+            const token = localStorage.getItem('vdem_github_token');
+            if (!token) {
+                alert('Please configure your GitHub token first.\n\n1. Go to Settings\n2. Paste your GitHub token\n3. Click Save Token');
+                toggleCollapse('settings');
+                return;
+            }
+
             // Prompt for password
-            const password = prompt('Enter password to save draft to repository:');
+            const password = prompt('Enter draft submission password:');
             if (!password) {
                 return; // User cancelled
             }
@@ -885,8 +956,9 @@
                     method: 'POST',
                     headers: {
                         'Accept': 'application/vnd.github.v3+json',
-                        'Authorization': 'Bearer YOUR_GITHUB_TOKEN_HERE', // You'll need to replace this
-                        'Content-Type': 'application/json'
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'VDEM-Training-App'
                     },
                     body: JSON.stringify({
                         event_type: 'save-draft',
@@ -905,10 +977,11 @@
                     setTimeout(() => {
                         draftMessage.classList.remove('show');
                     }, 5000);
-                } else if (response.status === 401) {
-                    throw new Error('Authentication failed. Contact administrator.');
+                } else if (response.status === 401 || response.status === 403) {
+                    throw new Error('Invalid GitHub token. Please check your token in Settings.');
                 } else {
-                    throw new Error(`Unexpected response: ${response.status}`);
+                    const error = await response.json();
+                    throw new Error(error.message || `Unexpected response: ${response.status}`);
                 }
 
             } catch (error) {
@@ -1058,6 +1131,7 @@
         }
 
         // Initial render
+        loadToken(); // Load saved token into settings
         
         // Auto-load from GitHub Pages if localStorage is empty
         if (events.length === 0) {

@@ -2,105 +2,172 @@
 
 This feature allows users to submit their event data back to the repository as timestamped drafts with password protection.
 
-## Setup Steps
+## 🔒 Security Model
 
-### 1. Create GitHub Secret for Password
+- **GitHub Token**: User-configurable, stored in browser localStorage only
+- **Draft Password**: Validated by GitHub Actions workflow server-side
+- **No secrets in code**: Everything stored securely
 
-1. Go to your repository: **https://github.com/nathanproton/vdem-training**
-2. Click **Settings** → **Secrets and variables** → **Actions**
-3. Click **"New repository secret"**
-4. Name: `DRAFT_PASSWORD`
-5. Value: Choose a secure password (share this with authorized users)
-6. Click **"Add secret"**
+## Setup Steps (Administrator)
 
-### 2. Create GitHub Personal Access Token
+### 1. Create GitHub Secret for Draft Password
 
+1. Go to: **https://github.com/nathanproton/vdem-training/settings/secrets/actions**
+2. Click **"New repository secret"**
+3. Name: `DRAFT_PASSWORD`
+4. Value: Choose a secure password (you'll share this with authorized users)
+5. Click **"Add secret"**
+
+### 2. Create a GitHub Personal Access Token (to share with users)
+
+**Option A: Single Shared Token (Easier)**
 1. Go to: **https://github.com/settings/tokens**
-2. Click **"Generate new token"** → **"Generate new token (classic)"**
-3. Give it a name: `vdem-training-dispatch`
-4. Set expiration: **No expiration** (or your preference)
-5. Select scope: **ONLY** check `repo` → `public_repo` (if public repo)
-   - OR check `repo` (full control) if private
+2. Click **"Generate new token (classic)"**
+3. Name: `vdem-training-shared`
+4. Expiration: Set as needed
+5. Scope: Check **ONLY** `public_repo` (minimal permissions)
 6. Click **"Generate token"**
-7. **COPY THE TOKEN** (you won't see it again!)
+7. **Copy and securely share this token** with authorized users
 
-### 3. Update index.html with Token
+**Option B: Individual User Tokens (More Secure)**
+- Each user creates their own token
+- Better audit trail
+- Users follow same steps above
 
-1. Open `index.html`
-2. Find line ~888:
-   ```javascript
-   'Authorization': 'Bearer YOUR_GITHUB_TOKEN_HERE',
-   ```
-3. Replace `YOUR_GITHUB_TOKEN_HERE` with your actual token:
-   ```javascript
-   'Authorization': 'Bearer ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxx',
-   ```
-4. Commit and push the change
+### 3. Share Credentials with Users
 
-### 4. Test the Feature
+Send to authorized users:
+- **GitHub Token**: `ghp_xxxxxxxxxxxxxxxxxxxx`
+- **Draft Password**: `YourSecurePassword123`
+- **Instructions**: See "For End Users" section below
+
+## For End Users
+
+### First-Time Setup
 
 1. Visit: **https://nathanproton.github.io/vdem-training/**
-2. Add or edit some events
-3. Click **"Save Draft to Repository"**
-4. Enter the password you set in step 1
-5. Enter your name (optional)
-6. Check the **Actions** tab for the workflow run
-7. If successful, find your draft in the `drafts/` folder!
+2. Click **"Settings"** to expand
+3. Paste your **GitHub token** in the field
+4. Click **"Save Token"**
+5. Done! You're ready to submit drafts
+
+### Submitting a Draft
+
+1. Add or edit your events
+2. Click **"Save Draft to Repository"**
+3. Enter the **draft password** (provided by administrator)
+4. Enter your name (optional)
+5. Wait for confirmation message
+6. Check the **Actions** tab to see the workflow run!
+
+### Your draft will be saved to:
+`drafts/events-YYYY-MM-DD_HH-MM-SS.json`
+
+View all drafts: **https://github.com/nathanproton/vdem-training/tree/main/drafts**
 
 ## How It Works
 
 ```
-User clicks button
-     ↓
-Enters password
-     ↓
-Frontend sends to GitHub API
-     ↓
-Triggers repository_dispatch event
-     ↓
-Workflow validates password
-     ↓
-Saves JSON as drafts/events-YYYY-MM-DD_HH-MM-SS.json
-     ↓
-Commits to repository
+┌─────────────────────┐
+│  User configures    │
+│  token in Settings  │
+│  (stored in browser)│
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  User clicks        │
+│  "Save Draft"       │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  Enter password     │
+│  Enter name         │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  Browser sends to   │
+│  GitHub API         │
+│  (using user token) │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  Workflow triggered │
+│  Validates password │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  Saves JSON draft   │
+│  Commits to repo    │
+└─────────────────────┘
 ```
 
-## Security Notes
+## Security Features
 
-⚠️ **Important:**
-- The GitHub token is **embedded in the HTML** (publicly visible)
-- Token scope is **limited to triggering workflows only**
-- **Actual security** comes from the password validation in the workflow
-- Password is sent to GitHub (over HTTPS) and validated server-side
-- Password is **never exposed** in the public HTML
-
-## File Locations
-
-- **Drafts saved to:** `drafts/events-YYYY-MM-DD_HH-MM-SS.json`
-- **Workflow:** `.github/workflows/save-draft.yml`
-- **Frontend code:** `index.html` (line ~862)
+✅ **Token in browser only** - Never in HTML source  
+✅ **Password validated server-side** - Can't be bypassed  
+✅ **HTTPS encryption** - Secure transmission  
+✅ **Limited token scope** - Only triggers workflows  
+✅ **Audit trail** - Who submitted what and when  
+✅ **Timestamped** - No overwrites, full history  
 
 ## Troubleshooting
 
-**"Authentication failed"**
-- Check that your GitHub token is valid
-- Verify token has `public_repo` or `repo` scope
+### "Please configure your GitHub token first"
+- Go to Settings
+- Paste your token
+- Click Save Token
 
-**Workflow doesn't run**
-- Check the Actions tab for errors
-- Verify `DRAFT_PASSWORD` secret is set correctly
+### "Invalid GitHub token"
+- Token may be expired or revoked
+- Check token scope includes `public_repo`
+- Create a new token
 
-**"Invalid password"**
-- User entered wrong password
-- Check workflow run logs in Actions tab
+### "Failed to save draft"
+- Check your internet connection
+- Verify repository is accessible
+- Check Actions tab for workflow errors
 
-## Usage for End Users
+### Workflow doesn't run
+- Verify `DRAFT_PASSWORD` secret is set in repository
+- Check token has correct permissions
+- View workflow logs in Actions tab
 
-1. Click **"Save Draft to Repository"**
-2. Enter the password (get from admin)
-3. Enter your name (optional)
-4. Wait for confirmation message
-5. Draft is saved with timestamp!
+## Token Permissions
 
-Your draft will be available at:
-`https://github.com/nathanproton/vdem-training/tree/main/drafts`
+The GitHub token needs **minimal permissions**:
+- For **public repositories**: `public_repo` scope only
+- For **private repositories**: `repo` scope (full control)
+
+The token can **ONLY**:
+- Trigger the `save-draft` workflow
+- Cannot push code directly
+- Cannot modify repository settings
+- Cannot access other repositories
+
+## Data Privacy
+
+- **GitHub Token**: Stored in user's browser localStorage only
+- **Events Data**: Sent directly to GitHub API over HTTPS
+- **No third-party services**: Direct browser → GitHub communication
+- **No tracking**: No analytics or data collection
+
+## Revoking Access
+
+**To revoke a user's access:**
+1. Change the `DRAFT_PASSWORD` secret
+2. Or revoke their GitHub token at: https://github.com/settings/tokens
+
+**User can clear their own token:**
+- Settings → "Clear Token" button
+
+## Cost
+
+- **GitHub Pages**: FREE
+- **GitHub Actions**: FREE (2000 minutes/month)
+- **No serverless costs**: Works entirely on GitHub infrastructure
+- **Total**: $0/month ✨
