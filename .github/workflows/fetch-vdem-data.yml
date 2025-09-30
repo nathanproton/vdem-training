@@ -49,10 +49,21 @@ jobs:
               # Fix malformed JSON
               # Remove leading comma, double commas, trailing commas
               fixed = decoded.strip()
-              fixed = re.sub(r'^\{,\s*', '{', fixed)
-              fixed = re.sub(r',,\s*', ',', fixed)
-              fixed = re.sub(r',\s*\}', '}', fixed)
-              fixed = re.sub(r',\s*\]', ']', fixed)
+              fixed = re.sub(r'^\{,\s*', '{', fixed)       # Remove {,
+              fixed = re.sub(r',,\s*', ',', fixed)          # Replace ,, with ,
+              fixed = re.sub(r',\s*\}', '}', fixed)         # Remove , before }
+              fixed = re.sub(r',\s*\]', ']', fixed)         # Remove , before ]
+              fixed = re.sub(r',\s*$', '', fixed)           # Remove trailing comma at end
+              
+              # If it ends with just a comma, wrap it in array brackets
+              if not fixed.endswith('}') and not fixed.endswith(']'):
+                  if fixed.endswith(','):
+                      fixed = fixed.rstrip(',').strip()
+              
+              # If it's a single object not in an array, wrap it
+              if fixed.startswith('{') and fixed.endswith('}'):
+                  # It's a single object, make it an array
+                  fixed = '[' + fixed + ']'
               
               try:
                   # Try to parse as JSON
