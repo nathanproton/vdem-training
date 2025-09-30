@@ -535,6 +535,10 @@
                 <button onclick="clearStorage()" class="danger">Clear Browser Storage</button>
                 <input type="file" id="import-file" accept=".json" style="display: none;" onchange="importData(event)">
                 <div class="spacer"></div>
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 13px;">
+                    <input type="checkbox" id="hide-past" onchange="filterPastEvents()" checked>
+                    Hide past events
+                </label>
                 <span class="page-info">Total Events: <strong id="total-count">0</strong></span>
             </div>
             <div class="table-scroll">
@@ -543,7 +547,9 @@
                         <tr>
                             <th>ID</th>
                             <th>Title</th>
-                            <th>Start Date</th>
+                            <th style="cursor: pointer;" onclick="toggleSort()">
+                                Start Date <span id="sort-indicator">▼</span>
+                            </th>
                             <th>End Date</th>
                             <th>Course Code</th>
                             <th>Type</th>
@@ -643,9 +649,12 @@
 
         let settings = loadSettingsFromStorage();
 
-        // Pagination
+        // Pagination and sorting
         const ITEMS_PER_PAGE = 20;
         let currentPage = 1;
+        let sortDirection = 'asc'; // 'asc' or 'desc'
+        let hidePastEvents = true;
+        let editingEventId = null;
 
         // DOM Elements
         const eventForm = document.getElementById('edit-form');
@@ -782,25 +791,67 @@
             icon.textContent = body.classList.contains('collapsed') ? '+' : '−';
         }
 
+        // Toggle sort direction
+        function toggleSort() {
+            sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            document.getElementById('sort-indicator').textContent = sortDirection === 'asc' ? '▲' : '▼';
+            currentPage = 1; // Reset to first page
+            renderEvents();
+        }
+
+        // Filter past events
+        function filterPastEvents() {
+            hidePastEvents = document.getElementById('hide-past').checked;
+            currentPage = 1; // Reset to first page
+            renderEvents();
+        }
+
+        // Get filtered and sorted events
+        function getFilteredEvents() {
+            let filteredEvents = [...events];
+            
+            // Filter past events if checkbox is checked
+            if (hidePastEvents) {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                filteredEvents = filteredEvents.filter(event => {
+                    const eventDate = new Date(event.end_date);
+                    return eventDate >= today;
+                });
+            }
+            
+            // Sort by start date
+            filteredEvents.sort((a, b) => {
+                const dateA = new Date(a.start_date);
+                const dateB = new Date(b.start_date);
+                return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
+            });
+            
+            return filteredEvents;
+        }
+
         // Pagination functions
         function getTotalPages() {
-            return Math.ceil(events.length / ITEMS_PER_PAGE) || 1;
+            const filtered = getFilteredEvents();
+            return Math.ceil(filtered.length / ITEMS_PER_PAGE) || 1;
         }
 
         function getPaginatedEvents() {
+            const filtered = getFilteredEvents();
             const start = (currentPage - 1) * ITEMS_PER_PAGE;
             const end = start + ITEMS_PER_PAGE;
-            return events.slice(start, end);
+            return filtered.slice(start, end);
         }
 
         function updatePaginationControls() {
             const totalPages = getTotalPages();
-            totalCountEl.textContent = events.length;
+            const filtered = getFilteredEvents();
+            totalCountEl.textContent = filtered.length + (hidePastEvents ? ' (upcoming)' : ' (all)');
             currentPageEl.textContent = currentPage;
             totalPagesEl.textContent = totalPages;
             
             prevBtn.disabled = currentPage === 1;
-            nextBtn.disabled = currentPage >= totalPages || events.length === 0;
+            nextBtn.disabled = currentPage >= totalPages || filtered.length === 0;
         }
 
         function changePage(delta) {
@@ -815,8 +866,11 @@
 
         // Render events table
         function renderEvents() {
-            if (events.length === 0) {
-                eventsTableBody.innerHTML = '<tr><td colspan="9" class="empty-state">No events added yet. Add your first event above!</td></tr>';
+            const filtered = getFilteredEvents();
+            
+            if (filtered.length === 0) {
+                const message = hidePastEvents ? 'No upcoming events. Uncheck "Hide past events" to see all events.' : 'No events added yet. Add your first event above!';
+                eventsTableBody.innerHTML = '<tr><td colspan="9" class="empty-state">' + message + '</td></tr>';
                 updatePaginationControls();
                 return;
             }
@@ -834,6 +888,7 @@
                     <td>${event.location_city}, ${event.location_state}</td>
                     <td>${event.delivery_mode || '-'}</td>
                     <td>
+                        <button onclick="editEvent(${event.event_id})" style="margin-right: 4px;">Edit</button>
                         <button class="danger" onclick="deleteEvent(${event.event_id})">Delete</button>
                     </td>
                 </tr>
@@ -842,16 +897,67 @@
             updatePaginationControls();
         }
 
-        // Add event
+        // Edit event
+        function editEvent(id) {
+            const event = events.find(e => e.event_id === id);
+            if (!event) return;
+
+            // Store editing ID
+            editingEventId = id;
+
+            // Populate form
+            document.getElementById('title').value = event.title || '';
+            document.getElementById('start_date').value = event.start_date || '';
+            document.getElementById('end_date').value = event.end_date || '';
+            document.getElementById('start_time').value = event.start_time || '';
+            document.getElementById('end_time').value = event.end_time || '';
+            document.getElementById('course_code').value = event.course_code || '';
+            document.getElementById('course_name').value = event.course_name || '';
+            document.getElementById('type').value = event.type || '';
+            document.getElementById('location_city').value = event.location_city || '';
+            document.getElementById('location_state').value = event.location_state || '';
+            document.getElementById('delivery_mode').value = event.delivery_mode || '';
+            document.getElementById('location_detail').value = event.location_detail || '';
+            document.getElementById('application_notes').value = event.application_notes || '';
+            document.getElementById('admin_notes').value = event.admin_notes || '';
+
+            // Show form if collapsed
+            const formBody = document.getElementById('add-form-body');
+            if (formBody.classList.contains('collapsed')) {
+                toggleCollapse('add-form');
+            }
+
+            // Scroll to form
+            document.getElementById('add-form-body').scrollIntoView({ behavior: 'smooth' });
+
+            // Change button text
+            const submitBtn = eventForm.querySelector('button[type="submit"]');
+            submitBtn.textContent = 'Update Event';
+        }
+
+        // Add/Update event
         eventForm.addEventListener('submit', function(e) {
             e.preventDefault();
 
             const formData = new FormData(eventForm);
-            const event = {
-                event_id: nextId++,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            };
+            
+            let event;
+            if (editingEventId !== null) {
+                // Update existing event
+                event = events.find(e => e.event_id === editingEventId);
+                if (!event) {
+                    alert('Event not found!');
+                    return;
+                }
+                event.updated_at = new Date().toISOString();
+            } else {
+                // Create new event
+                event = {
+                    event_id: nextId++,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                };
+            }
 
             // Collect form data
             for (let [key, value] of formData.entries()) {
@@ -869,25 +975,36 @@
                 return;
             }
 
-            // Add event
-            events.push(event);
+            // Add event if new
+            if (editingEventId === null) {
+                events.push(event);
+            }
             
             // Save to localStorage
             saveEventsToStorage();
             updateStorageStatus();
 
             // Show success message
+            successMessage.textContent = editingEventId !== null ? 'Event updated successfully!' : 'Event added successfully!';
             successMessage.classList.add('show');
             setTimeout(() => {
                 successMessage.classList.remove('show');
+                successMessage.textContent = 'Event added successfully!';
             }, 3000);
 
             // Reset form
             eventForm.reset();
             document.getElementById('location_state').value = 'VA';
+            editingEventId = null;
 
-            // Go to last page to see new event
-            currentPage = getTotalPages();
+            // Reset button text
+            const submitBtn = eventForm.querySelector('button[type="submit"]');
+            submitBtn.textContent = 'Add Event';
+
+            // Go to appropriate page
+            if (editingEventId === null) {
+                currentPage = getTotalPages();
+            }
             
             // Re-render table
             renderEvents();
