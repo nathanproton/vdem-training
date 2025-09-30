@@ -529,9 +529,11 @@
             <div id="publishError" class="error-message">Publish failed. Check your settings and try again.</div>
             <div class="controls">
                 <button onclick="exportData()">Export Data (JSON)</button>
+                <button onclick="document.getElementById('import-file').click()">Import Data (JSON)</button>
                 <button onclick="saveToFile()">Save to File (Download HTML)</button>
                 <button onclick="publishData()">Publish to API</button>
                 <button onclick="clearStorage()" class="danger">Clear Browser Storage</button>
+                <input type="file" id="import-file" accept=".json" style="display: none;" onchange="importData(event)">
                 <div class="spacer"></div>
                 <span class="page-info">Total Events: <strong id="total-count">0</strong></span>
             </div>
@@ -918,6 +920,71 @@
                 alert('Browser storage cleared! The page will reload.');
                 location.reload();
             }
+        }
+
+        // Import data from JSON file
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    
+                    // Validate it's an array
+                    if (!Array.isArray(importedData)) {
+                        alert('Invalid JSON file. Expected an array of events.');
+                        return;
+                    }
+
+                    // Ask user if they want to replace or merge
+                    const hasExistingData = events.length > 0;
+                    let shouldProceed = true;
+                    let shouldMerge = false;
+
+                    if (hasExistingData) {
+                        const choice = confirm(
+                            'You have ' + events.length + ' existing event(s).\n\n' +
+                            'Click OK to MERGE imported data with existing events.\n' +
+                            'Click Cancel to REPLACE all existing events.'
+                        );
+                        shouldMerge = choice;
+                    }
+
+                    if (shouldMerge) {
+                        // Merge: add imported events with new IDs
+                        const maxId = events.length > 0 ? Math.max(...events.map(e => e.event_id)) : 0;
+                        importedData.forEach((event, index) => {
+                            event.event_id = maxId + index + 1;
+                            events.push(event);
+                        });
+                        alert('Imported ' + importedData.length + ' events. Total events: ' + events.length);
+                    } else {
+                        // Replace: use imported data as-is
+                        events = importedData;
+                        nextId = events.length > 0 ? Math.max(...events.map(e => e.event_id)) + 1 : 1;
+                        alert('Replaced all data with ' + importedData.length + ' imported events.');
+                    }
+
+                    // Save to localStorage
+                    saveEventsToStorage();
+                    updateStorageStatus();
+
+                    // Reset to first page and render
+                    currentPage = 1;
+                    renderEvents();
+
+                    // Clear the file input so the same file can be imported again
+                    event.target.value = '';
+
+                } catch (error) {
+                    alert('Error parsing JSON file: ' + error.message);
+                    console.error('Import error:', error);
+                }
+            };
+
+            reader.readAsText(file);
         }
 
         // Export data to modal
