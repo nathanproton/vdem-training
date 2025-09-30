@@ -1,0 +1,7 @@
+# Drafts Directory
+
+This directory stores user-submitted event drafts.
+
+Files are automatically created by the GitHub Actions workflow when users submit their data.
+
+Format: `events-YYYY-MM-DD_HH-MM-SS.json`

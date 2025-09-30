@@ -1,0 +1,71 @@
+name: Save User Draft
+on:
+  repository_dispatch:
+    types: [save-draft]
+
+permissions:
+  contents: write
+
+jobs:
+  save-draft:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository 🛎️
+        uses: actions/checkout@v4
+
+      - name: Validate Password 🔐
+        run: |
+          # Check if password matches
+          if [ "${{ github.event.client_payload.password }}" != "${{ secrets.DRAFT_PASSWORD }}" ]; then
+            echo "❌ Invalid password"
+            exit 1
+          fi
+          echo "✓ Password validated"
+
+      - name: Save Draft Data 📝
+        run: |
+          # Create drafts directory if it doesn't exist
+          mkdir -p drafts
+          
+          # Generate timestamp
+          TIMESTAMP=$(date -u +"%Y-%m-%d_%H-%M-%S")
+          FILENAME="drafts/events-${TIMESTAMP}.json"
+          
+          # Save the JSON data
+          echo '${{ github.event.client_payload.data }}' > "${FILENAME}"
+          
+          # Pretty print the JSON
+          if command -v jq &> /dev/null; then
+            jq '.' "${FILENAME}" > "${FILENAME}.tmp" && mv "${FILENAME}.tmp" "${FILENAME}"
+          fi
+          
+          echo "✓ Saved draft to ${FILENAME}"
+          echo "DRAFT_FILE=${FILENAME}" >> $GITHUB_ENV
+
+      - name: Create Summary 📊
+        run: |
+          # Count events
+          EVENT_COUNT=$(jq 'length' "${DRAFT_FILE}")
+          
+          echo "## Draft Saved Successfully ✓" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **File:** \`${DRAFT_FILE}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Events:** ${EVENT_COUNT}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp:** $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Submitted by:** ${{ github.event.client_payload.user || 'Anonymous' }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Commit Draft 💾
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add drafts/
+          git commit -m "📋 Save draft: ${DRAFT_FILE}
+          
+          Events: $(jq 'length' ${DRAFT_FILE})
+          Submitted: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          User: ${{ github.event.client_payload.user || 'Anonymous' }}"
+          
+          git push
+          
+          echo "✓ Draft committed to repository"
