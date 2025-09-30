@@ -530,6 +530,7 @@
             <div class="controls">
                 <button onclick="exportData()">Export Data (JSON)</button>
                 <button onclick="document.getElementById('import-file').click()">Import Data (JSON)</button>
+                <button onclick="loadFromVDEM()">Load from VDEM Website</button>
                 <button onclick="saveToFile()">Save to File (Download HTML)</button>
                 <button onclick="publishData()">Publish to API</button>
                 <button onclick="clearStorage()" class="danger">Clear Browser Storage</button>
@@ -1039,6 +1040,118 @@
             }
         }
 
+        // Load from VDEM website
+        async function loadFromVDEM() {
+            const url = 'https://www.vaemergency.gov/resources/training-schedule1';
+            
+            try {
+                // Try to fetch the page
+                const response = await fetch(url, { mode: 'cors' });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch VDEM page');
+                }
+                
+                const html = await response.text();
+                
+                // Parse HTML to find meta tag
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const metaTag = doc.querySelector('meta[name="type"]');
+                
+                if (!metaTag) {
+                    throw new Error('Meta tag with event data not found on page');
+                }
+                
+                const metaContent = metaTag.getAttribute('content');
+                
+                // Decode HTML entities
+                const textarea = document.createElement('textarea');
+                textarea.innerHTML = metaContent;
+                let decodedJson = textarea.value;
+                
+                // Fix malformed JSON (remove extra commas)
+                decodedJson = decodedJson
+                    .replace(/^\{,\s*/, '{')        // Remove leading comma
+                    .replace(/,,\s*/g, ',')          // Replace double commas with single
+                    .replace(/,\s*\}/, '}')          // Remove trailing comma before }
+                    .replace(/,\s*\]/, ']');         // Remove trailing comma before ]
+                
+                // Try to parse as single object first
+                let importedData;
+                try {
+                    const singleEvent = JSON.parse(decodedJson);
+                    importedData = Array.isArray(singleEvent) ? singleEvent : [singleEvent];
+                } catch (e) {
+                    throw new Error('Failed to parse event data: ' + e.message);
+                }
+                
+                // Import the data
+                processImportedData(importedData);
+                
+            } catch (error) {
+                console.error('VDEM import error:', error);
+                
+                // Show user-friendly error with workaround
+                alert(
+                    'Unable to load from VDEM website directly.\n\n' +
+                    'Error: ' + error.message + '\n\n' +
+                    'WORKAROUND:\n' +
+                    '1. Visit: ' + url + '\n' +
+                    '2. Right-click → View Page Source\n' +
+                    '3. Find the <meta name="type"> tag\n' +
+                    '4. Copy the content attribute value\n' +
+                    '5. Use "Import Data" to upload it\n\n' +
+                    'OR: Use the import-data.json file that came with this app.'
+                );
+            }
+        }
+
+        // Process imported data (shared function)
+        function processImportedData(importedData) {
+            // Validate it's an array
+            if (!Array.isArray(importedData)) {
+                alert('Invalid data format. Expected an array of events.');
+                return;
+            }
+
+            // Ask user if they want to replace or merge
+            const hasExistingData = events.length > 0;
+            let shouldMerge = false;
+
+            if (hasExistingData) {
+                const choice = confirm(
+                    'You have ' + events.length + ' existing event(s).\n\n' +
+                    'Click OK to MERGE imported data with existing events.\n' +
+                    'Click Cancel to REPLACE all existing events.'
+                );
+                shouldMerge = choice;
+            }
+
+            if (shouldMerge) {
+                // Merge: add imported events with new IDs
+                const maxId = events.length > 0 ? Math.max(...events.map(e => e.event_id)) : 0;
+                importedData.forEach((event, index) => {
+                    event.event_id = maxId + index + 1;
+                    events.push(event);
+                });
+                alert('Imported ' + importedData.length + ' events. Total events: ' + events.length);
+            } else {
+                // Replace: use imported data as-is
+                events = importedData;
+                nextId = events.length > 0 ? Math.max(...events.map(e => e.event_id)) + 1 : 1;
+                alert('Replaced all data with ' + importedData.length + ' imported events.');
+            }
+
+            // Save to localStorage
+            saveEventsToStorage();
+            updateStorageStatus();
+
+            // Reset to first page and render
+            currentPage = 1;
+            renderEvents();
+        }
+
         // Import data from JSON file
         function importData(event) {
             const file = event.target.files[0];
@@ -1048,50 +1161,8 @@
             reader.onload = function(e) {
                 try {
                     const importedData = JSON.parse(e.target.result);
+                    processImportedData(importedData);
                     
-                    // Validate it's an array
-                    if (!Array.isArray(importedData)) {
-                        alert('Invalid JSON file. Expected an array of events.');
-                        return;
-                    }
-
-                    // Ask user if they want to replace or merge
-                    const hasExistingData = events.length > 0;
-                    let shouldProceed = true;
-                    let shouldMerge = false;
-
-                    if (hasExistingData) {
-                        const choice = confirm(
-                            'You have ' + events.length + ' existing event(s).\n\n' +
-                            'Click OK to MERGE imported data with existing events.\n' +
-                            'Click Cancel to REPLACE all existing events.'
-                        );
-                        shouldMerge = choice;
-                    }
-
-                    if (shouldMerge) {
-                        // Merge: add imported events with new IDs
-                        const maxId = events.length > 0 ? Math.max(...events.map(e => e.event_id)) : 0;
-                        importedData.forEach((event, index) => {
-                            event.event_id = maxId + index + 1;
-                            events.push(event);
-                        });
-                        alert('Imported ' + importedData.length + ' events. Total events: ' + events.length);
-                    } else {
-                        // Replace: use imported data as-is
-                        events = importedData;
-                        nextId = events.length > 0 ? Math.max(...events.map(e => e.event_id)) + 1 : 1;
-                        alert('Replaced all data with ' + importedData.length + ' imported events.');
-                    }
-
-                    // Save to localStorage
-                    saveEventsToStorage();
-                    updateStorageStatus();
-
-                    // Reset to first page and render
-                    currentPage = 1;
-                    renderEvents();
-
                     // Clear the file input so the same file can be imported again
                     event.target.value = '';
 
