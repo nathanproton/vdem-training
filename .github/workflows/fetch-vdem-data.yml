@@ -1,0 +1,105 @@
+name: Fetch VDEM Training Data
+on:
+  schedule:
+    # Runs daily at 6 AM UTC (1 AM EST / 2 AM EDT)
+    - cron: '0 6 * * *'
+  workflow_dispatch: # Allows manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-and-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository 🛎️
+        uses: actions/checkout@v4
+
+      - name: Fetch VDEM Website 📥
+        run: |
+          echo "Fetching VDEM training schedule..."
+          curl -s "https://www.vaemergency.gov/resources/training-schedule1" -o vdem-page.html
+          
+      - name: Parse and Extract Data 🔍
+        run: |
+          # Install html-xml-utils for parsing HTML
+          sudo apt-get update && sudo apt-get install -y html-xml-utils jq python3
+          
+          # Extract meta tag content using Python
+          python3 << 'EOF'
+          import re
+          import json
+          import html
+          
+          # Read the HTML file
+          with open('vdem-page.html', 'r', encoding='utf-8') as f:
+              html_content = f.read()
+          
+          # Find the meta tag with name="type"
+          meta_pattern = r'<meta\s+name="type"\s+content="([^"]+)"'
+          match = re.search(meta_pattern, html_content, re.IGNORECASE)
+          
+          if match:
+              # Get the content attribute
+              meta_content = match.group(1)
+              
+              # Decode HTML entities
+              decoded = html.unescape(meta_content)
+              
+              # Fix malformed JSON
+              # Remove leading comma, double commas, trailing commas
+              fixed = decoded.strip()
+              fixed = re.sub(r'^\{,\s*', '{', fixed)
+              fixed = re.sub(r',,\s*', ',', fixed)
+              fixed = re.sub(r',\s*\}', '}', fixed)
+              fixed = re.sub(r',\s*\]', ']', fixed)
+              
+              try:
+                  # Try to parse as JSON
+                  data = json.loads(fixed)
+                  
+                  # Make it an array if it's a single object
+                  if isinstance(data, dict):
+                      data = [data]
+                  
+                  # Write to file
+                  with open('vdem-latest.json', 'w', encoding='utf-8') as out:
+                      json.dump(data, out, indent=2, ensure_ascii=False)
+                  
+                  print(f"✓ Successfully extracted {len(data)} event(s)")
+                  
+              except json.JSONDecodeError as e:
+                  print(f"✗ Failed to parse JSON: {e}")
+                  print(f"Fixed content: {fixed[:500]}")
+                  exit(1)
+          else:
+              print("✗ Meta tag with name='type' not found")
+              exit(1)
+          EOF
+
+      - name: Update import-data.json 📝
+        run: |
+          # If extraction was successful, copy to import-data.json
+          if [ -f vdem-latest.json ]; then
+            cp vdem-latest.json import-data.json
+            echo "✓ Updated import-data.json"
+          fi
+
+      - name: Commit Changes 💾
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Check if there are changes
+          if [ -n "$(git status --porcelain import-data.json)" ]; then
+            git add import-data.json
+            git commit -m "🤖 Auto-update VDEM training data - $(date +'%Y-%m-%d %H:%M UTC')"
+            git push
+            echo "✓ Changes committed and pushed"
+          else
+            echo "ℹ️ No changes detected"
+          fi
+
+      - name: Clean up 🧹
+        run: |
+          rm -f vdem-page.html vdem-latest.json
