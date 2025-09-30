@@ -621,6 +621,40 @@
             return JSON.parse(document.getElementById('embedded-data').textContent.trim());
         }
 
+        // Fetch latest data from GitHub Pages
+        async function fetchLatestData() {
+            const url = 'https://nathanproton.github.io/vdem-training/import-data.json';
+            
+            try {
+                console.log('Fetching latest data from GitHub Pages...');
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch latest data');
+                }
+                
+                const data = await response.json();
+                
+                if (Array.isArray(data) && data.length > 0) {
+                    console.log(`✓ Loaded ${data.length} events from GitHub Pages`);
+                    events = data;
+                    nextId = events.length > 0 ? Math.max(...events.map(e => e.event_id)) + 1 : 1;
+                    
+                    // Save to localStorage
+                    saveEventsToStorage();
+                    updateStorageStatus();
+                    
+                    // Render
+                    renderEvents();
+                    
+                    return true;
+                }
+            } catch (error) {
+                console.error('Failed to fetch from GitHub Pages:', error);
+                return false;
+            }
+        }
+
         // Load settings from localStorage or embedded data
         function loadSettingsFromStorage() {
             const stored = localStorage.getItem('vdem_training_settings');
@@ -1246,7 +1280,18 @@
 
         // Initial render
         loadSettings();
-        renderEvents();
+        
+        // Auto-load from GitHub Pages if localStorage is empty
+        if (events.length === 0) {
+            fetchLatestData().then(success => {
+                if (!success) {
+                    // If fetch failed, just render what we have (empty or embedded)
+                    renderEvents();
+                }
+            });
+        } else {
+            renderEvents();
+        }
     </script>
 </body>
 </html>
