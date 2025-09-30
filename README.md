@@ -15,7 +15,7 @@ A self-contained, offline-capable training events management system for Virginia
 ## Usage
 
 ### Online (GitHub Pages)
-Visit: `https://YOUR-USERNAME.github.io/vdem-training/`
+Visit: `https://nathanproton.github.io/vdem-training/`
 
 ### Offline
 1. Download `index.html`
