@@ -1,0 +1,95 @@
+{
+    "training_events": {
+      "event_id": {
+        "type": "integer",
+        "autoIncrement": true,
+        "primaryKey": true
+      },
+      "start_date": {
+        "type": "date",
+        "required": true,
+        "format": "YYYY-MM-DD",
+        "rules": ["must be <= end_date"]
+      },
+      "end_date": {
+        "type": "date",
+        "required": true,
+        "format": "YYYY-MM-DD",
+        "rules": ["must be >= start_date"]
+      },
+      "start_time": {
+        "type": "time",
+        "required": false,
+        "format": "HH:MM:SS",
+        "rules": ["24-hour format"]
+      },
+      "end_time": {
+        "type": "time",
+        "required": false,
+        "format": "HH:MM:SS",
+        "rules": ["must be > start_time when both exist"]
+      },
+      "title": {
+        "type": "string",
+        "maxLength": 150,
+        "required": true
+      },
+      "course_code": {
+        "type": "string",
+        "maxLength": 15,
+        "pattern": "^[A-Z0-9]+$",
+        "required": false
+      },
+      "course_name": {
+        "type": "string",
+        "maxLength": 100,
+        "required": false
+      },
+      "type": {
+        "type": "string",
+        "enum": ["ICS", "G-series", "L-series", "HazMat", "Other"],
+        "required": false
+      },
+      "location_city": {
+        "type": "string",
+        "maxLength": 50,
+        "pattern": "^[A-Za-z\\s\\-]+$",
+        "required": true
+      },
+      "location_state": {
+        "type": "string",
+        "length": 2,
+        "default": "VA",
+        "required": true
+      },
+      "location_detail": {
+        "type": "string",
+        "maxLength": 150,
+        "required": false
+      },
+      "delivery_mode": {
+        "type": "string",
+        "enum": ["In-Person", "Virtual", "Hybrid"],
+        "required": false
+      },
+      "application_notes": {
+        "type": "string",
+        "maxLength": 200,
+        "required": false
+      },
+      "admin_notes": {
+        "type": "string",
+        "maxLength": 150,
+        "required": false
+      },
+      "created_at": {
+        "type": "timestamp",
+        "default": "now"
+      },
+      "updated_at": {
+        "type": "timestamp",
+        "autoUpdate": true
+      }
+    }
+  }
+  
